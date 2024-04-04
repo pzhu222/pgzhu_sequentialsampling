@@ -1,0 +1,230 @@
+---
+title: "bf_pvalue_sims"
+output: html_document
+date: "2024-04-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(BayesFactor)
+
+```
+
+```{r}
+
+# Initialize an Empty Data Frame
+data_same <- tibble(
+  id = integer(),
+  condition = factor(levels = c("A", "B")),
+  response = integer()
+)
+
+# Vectors to store p-values and Bayes Factors
+p_values <- numeric()
+bayes_factors <- numeric()
+
+set.seed(5) # For reproducibility
+
+# Generate data and perform analyses iteratively, in pairs to keep conditions balanced
+for (i in seq(1, 8000, by = 2)) {
+  # Generate data for the current pair
+  current_responses <- sample(0:1, 2, replace = TRUE)
+  
+  # Add the pairs to the data frame: one from A and one from B
+  data_same <- bind_rows(data_same, 
+                    tibble(id = c(i, i+1), 
+                           condition = factor(c("A", "B"), levels = c("A", "B")), 
+                           response = current_responses))
+  
+  if (i > 2 && all(table(data_same$response) >= 1)) {
+    # Perform logistic regression
+    model <- glm(response ~ condition, data = data_same, family = binomial())
+    p_values <- c(p_values, rep(summary(model)$coefficients["conditionB", 4], 2))
+    
+    # Calculate Bayes Factor using anovaBF
+    bf_result <- BF(model, hypothesis = 'condition = 0', complement = T)
+    bf_numeric <- bf_result$BFmatrix_confirmatory[2] # Extract BF as numeric
+    bayes_factors <- c(bayes_factors, rep(bf_numeric, 2))
+  } else {
+    p_values <- c(p_values, rep(NA, 2))
+    bayes_factors <- c(bayes_factors, rep(NA, 2))
+  }
+}
+
+# Add p-values and Bayes Factors to the data frame
+data_same$p_value <- p_values
+data_same$bayes_factor <- bayes_factors
+
+# View the first few rows of the final data frame
+head(data_same)
+
+```
+
+```{r}
+
+ggplot(data = data_same,
+       mapping = aes(x = id,
+                     y = p_value)) +
+  geom_line(color = "green") +
+  geom_hline(yintercept = .05,
+             linetype = "dotted") +
+  theme_classic() +
+  labs(y = "p-value",
+       x = "Participants") +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+ggplot(data = data_same,
+       mapping = aes(x = id,
+                     y = bayes_factor)) +
+  geom_line(color = "lightblue") +
+  theme_classic() +
+  labs(y = "BF",
+       x = "Participants") +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+```
+
+```{r}
+
+
+# Initialize an Empty Data Frame
+data_diff <- tibble(
+  id = integer(),
+  condition = factor(levels = c("A", "B")),
+  response = integer()
+)
+
+# Vectors to store p-values and Bayes Factors
+p_values <- numeric()
+bayes_factors <- numeric()
+
+set.seed(5) # For reproducibility
+
+# Generate data and perform analyses iteratively, in pairs to keep conditions balanced
+for (i in seq(1, 8000, by = 2)) {
+  # Generate data for the current pair with specific probabilities for each condition
+  # For condition A, 75% chance of getting a 1
+  # For condition B, 25% chance of getting a 1
+  current_responses <- c(sample(0:1, 1, replace = TRUE, prob = c(0.4, 0.6)), # Condition A
+                         sample(0:1, 1, replace = TRUE, prob = c(0.6, 0.4))) # Condition B
+  
+  # Add the pairs to the data frame: one from A and one from B
+  data_diff <- bind_rows(data_diff, 
+                    tibble(id = c(i, i+1), 
+                           condition = factor(c("A", "B"), levels = c("A", "B")), 
+                           response = current_responses))
+  
+  if (i > 2 && all(table(data_diff$response) >= 1)) {
+    # Perform logistic regression
+    model <- glm(response ~ condition, data = data_diff, family = binomial())
+    p_values <- c(p_values, rep(summary(model)$coefficients["conditionB", 4], 2))
+    
+    # Calculate Bayes Factor using anovaBF
+    bf_result <- BF(model, hypothesis = 'condition = 0', complement = T)
+    bf_numeric <- bf_result$BFmatrix_confirmatory[2] # Extract BF as numeric
+    bayes_factors <- c(bayes_factors, rep(bf_numeric, 2))
+  } else {
+    p_values <- c(p_values, rep(NA, 2))
+    bayes_factors <- c(bayes_factors, rep(NA, 2))
+  }
+}
+
+# Add p-values and Bayes Factors to the data frame
+data_diff$p_value <- p_values
+data_diff$bayes_factor <- bayes_factors
+
+# View the first few rows of the final data frame
+head(data_diff)
+
+```
+
+```{r}
+
+ggplot(data = data_diff,
+       mapping = aes(x = id,
+                     y = p_value)) +
+  geom_line(color = "green") +
+  geom_hline(yintercept = .05,
+             linetype = "dotted") +
+  theme_classic() +
+  labs(y = "p-value",
+       x = "Participants") +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+ggplot(data = data_diff,
+       mapping = aes(x = id,
+                     y = bayes_factor)) +
+  geom_line(color = "lightblue") +
+  theme_classic() +
+  labs(y = "BF",
+       x = "Participants") +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+```
+
+
+What I did to find the right seed:
+
+```{r}
+
+library(tidyverse)
+
+# Function to generate data and calculate p-values
+generate_data_and_p_values <- function(seed) {
+  set.seed(seed) # Set seed
+  # Initialize an Empty Data Frame
+  data <- tibble(
+    id = integer(),
+    condition = factor(levels = c("A", "B")),
+    response = integer()
+  )
+
+  # Vectors to store p-values
+  p_values <- numeric()
+
+  # Generate data and perform analyses iteratively, in pairs to keep conditions balanced
+  for (i in seq(1, 8000, by = 2)) {
+    # Generate data for the current pair
+    current_responses <- sample(0:1, 2, replace = TRUE)
+  
+    # Add the pairs to the data frame: one from A and one from B
+    data <- bind_rows(data, 
+                      tibble(id = c(i, i+1), 
+                             condition = factor(c("A", "B"), levels = c("A", "B")), 
+                             response = current_responses))
+  
+    if (i > 2 && all(table(data$response) >= 1)) {
+      # Perform logistic regression
+      model <- glm(response ~ condition, data = data, family = binomial())
+      p_values <- c(p_values, rep(summary(model)$coefficients["conditionB", 4], 2))
+    } else {
+      p_values <- c(p_values, rep(NA, 2))
+    }
+  }
+  # Return p-values and data
+  return(list(p_values = p_values, data = data))
+}
+
+# Find seed that generates at least one p-value below 0.05
+seed <- 5
+min_p_value <- Inf
+while (min_p_value >= 0.05) {
+  result <- generate_data_and_p_values(seed)
+  p_values <- result$p_values
+  min_p_value <- min(p_values, na.rm = TRUE)
+  cat("Seed:", seed, "- Min p-value:", min_p_value, "\n")
+  seed <- seed + 1
+}
+
+```
+

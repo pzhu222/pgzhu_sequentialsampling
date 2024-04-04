@@ -1,0 +1,166 @@
+---
+title: "toddlerimprovement_seqsampling"
+output: html_document
+date: "2024-04-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(BayesFactor)
+library(BFpack)
+library(here)
+```
+
+```{r}
+#read in data
+
+df.improvedata_raw <- read.csv(here("data/toddlerimprovement_data.csv"),
+                           header = T)
+
+df.improvedata <- df.improvedata_raw |>  
+  filter(exclude == 0 |
+         is.na(exclude)) |> 
+  mutate(condition = ifelse(condition == 1, "Improvement", "Stochastic")) |> 
+  select(age,
+         gender,
+         condition,
+         side,
+         choice)
+```
+
+```{r}
+#basic level information
+
+mean(as.numeric(df.improvedata$age), na.rm = T)
+
+sd(as.numeric(df.improvedata$age), na.rm = T)
+
+range(as.numeric(df.improvedata$age), na.rm = T)
+
+df.improvedata |> 
+  group_by(gender) |> 
+  summarize(n = n())
+
+df.improvedata |> 
+  group_by(condition, choice) |> 
+  summarize(n = n())
+
+
+```
+
+
+```{r}
+
+#run frequentist tests
+
+df.fisher <- df.improvedata |> 
+  group_by(condition) |> 
+  summarize(test = sum(choice),
+            notest = n() - sum(choice)) |> 
+  select(test, notest)
+
+fisher.test(df.fisher)
+
+df.fisher
+
+```
+```{r}
+#bayesian analyses, starting with BFpack
+
+glm_model <- glm(choice ~ condition, family = 'binomial',
+             data = df.improvedata)
+
+summary(glm_model)
+
+BF_model <- BF(glm_model, hypothesis = 'condition < 0; condition = 0',
+               complement = F)
+
+BF_model
+
+#now using BayesFactor package contingencyTableBF
+
+data_matrix <- data.matrix(df.fisher)
+
+BF_CT <- contingencyTableBF(data_matrix, 
+                            sampleType = "indepMulti", 
+                            fixedMargin = "cols",
+                            priorConcentration = )
+
+summary(BF_CT)
+
+```
+plot
+```{r}
+
+ggplot(data = df.improvedata,
+       aes(x = as.factor(condition), 
+           y = (choice*100), 
+           color = as.factor(condition)))  +
+  geom_jitter(height = 0,
+              width = .3,
+              alpha = .3,
+              size = 5) +
+  stat_summary(fun.data = "mean_cl_boot",
+               geom = "pointrange",
+               size = 2,
+               linewidth = 1.5) +
+  scale_color_manual(values = c("Improvement" = "#4682B4",
+                                "Stochastic" = "#f1807e")) +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_text(size = 28, family = "Avenir", face = "bold"),
+        axis.title = element_text(size = 30, face = "bold", family = "Avenir"),
+        axis.title.x = element_text(vjust = -.75, size = 30, face = "bold", family = "Avenir"), 
+        axis.title.y = element_text(vjust = +1.5, size = 30, face = "bold", family = "Avenir"))+
+  labs(x = "Condition",
+       y = "% Choosing Test Toy")
+
+```
+
+How did the Bayes Factor change over time?
+
+```{r}
+# Initialize a column for Bayes Factors
+df.improvedata$bayes_factor <- NA
+
+# Loop through each row to update Bayes Factor based on data up to that point
+for (i in 1:nrow(df.improvedata)) {
+  # Subset the data up to the current row
+  data_subset <- df.improvedata[1:i, ]
+  
+  # Create the contingency table from the subset
+  contingency_table <- table(data_subset$condition, data_subset$choice)
+  
+  # Ensure the contingency table is 2x2
+  if (dim(contingency_table)[1] < 2) {
+    contingency_table <- rbind(contingency_table, c(0, 0))
+  }
+  if (dim(contingency_table)[2] < 2) {
+    contingency_table <- cbind(contingency_table, c(0, 0))
+  }
+  
+  # Calculate Bayes Factor for the subset
+  BF_CT <- contingencyTableBF(contingency_table, sampleType = "indepMulti", fixedMargin = "cols", priorConcentration = 1)
+  
+  # Extract the Bayes Factor value
+  bf_value <- exp(BF_CT@bayesFactor$bf)
+  
+  # Update the Bayes Factor in the dataframe
+  df.improvedata$bayes_factor[i] <- bf_value
+}
+
+#let's plot it
+
+ggplot(data = df.improvedata,
+       aes(x = 1:nrow(df.improvedata),
+           y = bayes_factor)) +
+  geom_line() +
+  #where sequential sampling began
+  geom_vline(xintercept = 32, linetype = "dotted", color = "red") +
+  geom_hline(yintercept = 10, linetype = "dashed") +
+  theme_classic() +
+  labs(y = "Bayes Factor",
+       x = "Participant #")
+```
+
