@@ -173,7 +173,7 @@ ggplot(data = data_diff,
 ```
 
 
-What I did to find the right seed:
+Let's purposely find a seed where the p-value goes under .05, despite H0 being true:
 
 ```{r}
 

@@ -65,6 +65,8 @@ fisher.test(df.fisher)
 df.fisher
 
 ```
+
+
 ```{r}
 #bayesian analyses, starting with BFpack
 
@@ -73,7 +75,7 @@ glm_model <- glm(choice ~ condition, family = 'binomial',
 
 summary(glm_model)
 
-BF_model <- BF(glm_model, hypothesis = 'condition < 0; condition = 0',
+BF_model <- BF(glm_model, hypothesis = 'conditionStochastic < 0; conditionStochastic = 0',
                complement = F)
 
 BF_model
@@ -84,8 +86,7 @@ data_matrix <- data.matrix(df.fisher)
 
 BF_CT <- contingencyTableBF(data_matrix, 
                             sampleType = "indepMulti", 
-                            fixedMargin = "cols",
-                            priorConcentration = )
+                            fixedMargin = "rows")
 
 summary(BF_CT)
 
@@ -155,7 +156,8 @@ for (i in 1:nrow(df.improvedata)) {
 ggplot(data = df.improvedata,
        aes(x = 1:nrow(df.improvedata),
            y = bayes_factor)) +
-  geom_line() +
+  geom_line(alpha = .3) +
+  geom_point() +
   #where sequential sampling began
   geom_vline(xintercept = 32, linetype = "dotted", color = "red") +
   geom_hline(yintercept = 10, linetype = "dashed") +
